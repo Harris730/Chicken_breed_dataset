@@ -27,7 +27,7 @@ It provides a foundation for **machine learning projects** and **data-driven ins
 
 ## Dataset Structure
 The dataset includes the following fields:  
-- `breed_id` – Unique ID for each breed  
+- `breed_category` – Category of the chicken breed
 - `breed_name` – Name of the chicken breed  
 - `description` – Detailed description of the breed  
 - `image_url` – URL of the representative image (images stored in `/images/` folder)  
