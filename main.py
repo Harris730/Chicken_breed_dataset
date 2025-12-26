@@ -5,6 +5,9 @@ import csv
 import time
 import re
 
+# ===============================
+# CONFIG
+# ===============================
 URL = "https://starmilling.com/poultry-chicken-breeds/"
 HEADERS = {
     "User-Agent": (
@@ -13,22 +16,29 @@ HEADERS = {
         "Chrome/120.0.0.0 Safari/537.36"
     )
 }
-def safe_filename(text):
-    # Remove invalid Windows characters
-    text = re.sub(r'[\\/:*?"<>|]', '', text)
-    # Replace spaces with underscore
-    return text.replace(" ", "_").lower()
 
 IMAGE_DIR = "images"
 CSV_FILE = "chicken_breeds.csv"
 
 os.makedirs(IMAGE_DIR, exist_ok=True)
 
+# ===============================
+# UTILS
+# ===============================
+def safe_filename(text):
+    """Make filename OS-safe"""
+    text = re.sub(r'[\\/:*?"<>|]', '', text)
+    return text.replace(" ", "_").lower()
+
+# ===============================
+# SESSION
+# ===============================
 session = requests.Session()
 session.headers.update(HEADERS)
 
+# ===============================
 # FETCH PAGE
-
+# ===============================
 response = session.get(URL, timeout=20)
 response.raise_for_status()
 
@@ -36,30 +46,35 @@ soup = BeautifulSoup(response.text, "html.parser")
 
 results = []
 
-# SCRAPE EACH BREED ROW
+# ===============================
+# SCRAPE EACH BREED
+# ===============================
 rows = soup.find_all("div", class_="et_pb_row")
 
 for row in rows:
 
-    # Each breed row has an id like "australorp", "barnvelder"
+    # Breed unique ID (used as stable key)
     breed_id = row.get("id")
     if not breed_id:
         continue
 
-    # BREED NAME
+    # Breed name
     title_tag = row.find("h2")
     if not title_tag:
         continue
 
     breed_name = title_tag.get_text(strip=True)
 
-    # DESCRIPTION
+    # Description
     paragraphs = row.find_all("p")
-    description = " ".join(p.get_text(" ", strip=True) for p in paragraphs)
+    description = " ".join(
+        p.get_text(" ", strip=True) for p in paragraphs
+    )
 
-    # IMAGE
+    # Image extraction
     img_tag = row.find("img")
     image_url = None
+    image_filename = None
 
     if img_tag:
         image_url = (
@@ -67,43 +82,44 @@ for row in rows:
             img_tag.get("src")
         )
 
-    # Download image only if valid URL
+    # Download image if valid
     if image_url and image_url.startswith("http"):
-        img_filename = safe_filename(breed_name) + ".jpg"
-
-        img_path = os.path.join(IMAGE_DIR, img_filename)
+        image_filename = f"{breed_id}.jpg"
+        img_path = os.path.join(IMAGE_DIR, image_filename)
 
         try:
-            img_data = session.get(image_url, timeout=15).content
+            img_response = session.get(image_url, timeout=15)
+            img_response.raise_for_status()
+
             with open(img_path, "wb") as f:
-                f.write(img_data)
-            time.sleep(0.4)  
+                f.write(img_response.content)
+
+            time.sleep(0.4)  # be polite
         except Exception as e:
             print(f"Image failed for {breed_name}: {e}")
-            image_url = None
-    else:
-        image_url = None
+            image_filename = None
 
-    # SAVE DATA
-  
+    # Save linked record
     results.append({
         "breed_id": breed_id,
         "breed_name": breed_name,
         "description": description,
-        "image_url": image_url
+        "image": image_filename
     })
 
-
+# ===============================
 # SAVE CSV
-
+# ===============================
 with open(CSV_FILE, "w", newline="", encoding="utf-8") as f:
     writer = csv.DictWriter(
         f,
-        fieldnames=["breed_id", "breed_name", "description", "image_url"]
+        fieldnames=["breed_id", "breed_name", "description", "image"]
     )
     writer.writeheader()
     writer.writerows(results)
 
-print(f"Total breeds: {len(results)}")
-print(f"CSV saved: {CSV_FILE}")
-print(f"Images saved in: ./{IMAGE_DIR}/")
+print("=" * 50)
+print(f"Total breeds scraped : {len(results)}")
+print(f"CSV saved            : {CSV_FILE}")
+print(f"Images directory     : ./{IMAGE_DIR}/")
+print("=" * 50)
