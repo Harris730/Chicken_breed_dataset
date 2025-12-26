@@ -5,9 +5,7 @@ import csv
 import time
 import re
 
-# ===============================
-# CONFIG
-# ===============================
+
 URL = "https://starmilling.com/poultry-chicken-breeds/"
 HEADERS = {
     "User-Agent": (
@@ -22,23 +20,13 @@ CSV_FILE = "chicken_breeds.csv"
 
 os.makedirs(IMAGE_DIR, exist_ok=True)
 
-# ===============================
-# UTILS
-# ===============================
 def safe_filename(text):
-    """Make filename OS-safe"""
     text = re.sub(r'[\\/:*?"<>|]', '', text)
     return text.replace(" ", "_").lower()
 
-# ===============================
-# SESSION
-# ===============================
+
 session = requests.Session()
 session.headers.update(HEADERS)
-
-# ===============================
-# FETCH PAGE
-# ===============================
 response = session.get(URL, timeout=20)
 response.raise_for_status()
 
@@ -46,16 +34,14 @@ soup = BeautifulSoup(response.text, "html.parser")
 
 results = []
 
-# ===============================
-# SCRAPE EACH BREED
-# ===============================
+
 rows = soup.find_all("div", class_="et_pb_row")
 
 for row in rows:
 
-    # Breed unique ID (used as stable key)
-    breed_id = row.get("id")
-    if not breed_id:
+    # Breed type
+    breed_category = row.get("category")
+    if not breed_category:
         continue
 
     # Breed name
@@ -84,7 +70,7 @@ for row in rows:
 
     # Download image if valid
     if image_url and image_url.startswith("http"):
-        image_filename = f"{breed_id}.jpg"
+        image_filename = f"{breed_category}.jpg"
         img_path = os.path.join(IMAGE_DIR, image_filename)
 
         try:
@@ -94,32 +80,29 @@ for row in rows:
             with open(img_path, "wb") as f:
                 f.write(img_response.content)
 
-            time.sleep(0.4)  # be polite
+            time.sleep(0.4)  # slow it
         except Exception as e:
             print(f"Image failed for {breed_name}: {e}")
             image_filename = None
 
     # Save linked record
     results.append({
-        "breed_id": breed_id,
+        "breed_category": breed_category,
         "breed_name": breed_name,
         "description": description,
         "image": image_filename
     })
 
-# ===============================
+
 # SAVE CSV
-# ===============================
 with open(CSV_FILE, "w", newline="", encoding="utf-8") as f:
     writer = csv.DictWriter(
         f,
-        fieldnames=["breed_id", "breed_name", "description", "image"]
+        fieldnames=["breed_category", "breed_name", "description", "image"]
     )
     writer.writeheader()
     writer.writerows(results)
 
-print("=" * 50)
-print(f"Total breeds scraped : {len(results)}")
 print(f"CSV saved            : {CSV_FILE}")
 print(f"Images directory     : ./{IMAGE_DIR}/")
-print("=" * 50)
+
